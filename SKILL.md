@@ -16,6 +16,48 @@ A fork of [Hive](https://hive.io). The standard Hive RPC surface (`condenser_api
 
 Both serve full Hive-compatible JSON-RPC. `bridge.*`, `follow_api.*`, `tags_api.*` and select `condenser_api.*` social methods are routed to a **Hivemind** indexer behind the same endpoint.
 
+## Docker images
+
+Use the published images when a local Pixagram node, HAF node, Hivemind indexer, or witness feed is needed:
+
+| Image | Use |
+|---|---|
+| `pixadock/pixagram:pre-mainnet` | Main blockchain node (`hived`) and CLI wallet |
+| `pixadock/pixagram-haf:pre-mainnet` | HAF node (`hived` + PostgreSQL indexer) |
+| `pixadock/hivemind:pre-mainnet` | Hivemind setup, sync, and social API server |
+| `pixadock/bigmac-feed:latest` | Witness price feed publisher |
+
+For a working full stack, prefer the Pixagram alphanet Docker Compose setup (`pixagram-blockchain/alphanet`). It wires together `pixagram`, `pixagram_haf`, Hivemind setup/sync/server, Jussi, TLS, and `bigmac-feed`.
+
+The main image includes `/home/hived/bin/cli_wallet`. Override the entrypoint to run it; it defaults to the Pixagram chain ID. Use `-o` for offline signing, or pass `--server-rpc-endpoint=ws://...` for a websocket RPC node.
+
+```bash
+mkdir -p wallet
+docker run --rm -it \
+  -v "$PWD/wallet:/wallet" \
+  -w /wallet \
+  --entrypoint /home/hived/bin/cli_wallet \
+  pixadock/pixagram:pre-mainnet \
+  -o
+```
+
+Minimal direct node example:
+
+```bash
+mkdir -p pixagram
+docker run --rm -it \
+  -p 7777:7777 -p 2001:2001 \
+  -v "$PWD/pixagram:/home/hived/datadir" \
+  -e DATADIR=/home/hived/datadir \
+  -e SHM_DIR=/home/hived/datadir/blockchain \
+  -e HTTP_PORT=7777 \
+  -e HIVED_UID=1000 \
+  --ulimit nofile=1048576:1048576 \
+  --entrypoint /bin/bash \
+  pixadock/pixagram:pre-mainnet \
+  -lc 'exec /home/hived_admin/docker_entrypoint.sh /home/hived/bin/hived'
+```
+
 ## Differences from Hive
 
 ### Tokens & addresses
