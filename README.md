@@ -12,26 +12,98 @@ The skill covers:
 
 The skill is intentionally brief — it points at [Hive's developer docs](https://developers.hive.io/) for everything that didn't change.
 
-## Install
+---
 
-### Claude Code
+## Install — Claude Code
+
+Claude Code auto-loads skills from `~/.claude/skills/<name>/SKILL.md` (user-wide) or `.claude/skills/<name>/SKILL.md` (per-project).
+
+### Option A — user-wide (recommended)
+
+Available in every Claude Code session, every project:
 
 ```bash
 git clone git@github.com:pixagram-blockchain/pixagram-skill.git ~/.claude/skills/pixagram
 ```
 
-Restart Claude Code (or open a new conversation). The skill becomes available automatically and the agent will invoke it whenever a task mentions Pixagram, PIXA/PXS/VESTS, the public endpoints, or any account/post/witness operation on this chain.
+Then open a new conversation. The skill is now discoverable; Claude will invoke it whenever a task mentions Pixagram, PIXA/PXS/VESTS, the public endpoints, or any account/post/witness operation on this chain.
 
-### Codex / other agents
+### Option B — per-project
 
-Point your agent at `SKILL.md` as a system / context document, or symlink it into wherever your agent loads skills from.
+Scoped to one project's repo:
+
+```bash
+cd /path/to/your/project
+git clone git@github.com:pixagram-blockchain/pixagram-skill.git .claude/skills/pixagram
+```
+
+You may want to add `.claude/skills/pixagram` to your project's `.gitignore` (or commit it if everyone on the team should get it).
+
+### Verify
+
+In a new Claude Code session, ask: *"What's the public-key prefix on Pixagram?"* — Claude should invoke the `pixagram` skill before answering.
+
+---
+
+## Install — Codex CLI
+
+Codex CLI (OpenAI) reads context from `AGENTS.md` files: `~/.codex/AGENTS.md` for global instructions, or `AGENTS.md` at the root of any project.
+
+Since Codex doesn't have a separate "skills" loader, append (or symlink) the skill content into the appropriate `AGENTS.md`.
+
+### Option A — user-wide
+
+```bash
+git clone git@github.com:pixagram-blockchain/pixagram-skill.git ~/.codex/pixagram-skill
+mkdir -p ~/.codex
+cat ~/.codex/pixagram-skill/SKILL.md >> ~/.codex/AGENTS.md
+```
+
+To stay current with upstream:
+
+```bash
+cd ~/.codex/pixagram-skill && git pull
+# then re-append (or maintain a marker block in AGENTS.md and replace between markers)
+```
+
+### Option B — per-project
+
+```bash
+cd /path/to/your/project
+git clone git@github.com:pixagram-blockchain/pixagram-skill.git .codex-skills/pixagram
+cat .codex-skills/pixagram/SKILL.md >> AGENTS.md
+```
+
+Or, if you prefer a single source of truth without copy-pasting:
+
+```bash
+# Replace AGENTS.md (or append a section to it) with an include marker, and run a small
+# pre-commit hook / script to regenerate AGENTS.md from .codex-skills/*/SKILL.md.
+```
+
+### Verify
+
+Run `codex` and ask the same probe question — *"What's the public-key prefix on Pixagram?"* — Codex should answer `PIX` and reference the renamed token model.
+
+---
 
 ## Updating
 
+### Claude Code
+
 ```bash
-cd ~/.claude/skills/pixagram
+cd ~/.claude/skills/pixagram     # or .claude/skills/pixagram for per-project
 git pull
 ```
+
+### Codex CLI
+
+```bash
+cd ~/.codex/pixagram-skill && git pull
+# then regenerate / re-append into AGENTS.md
+```
+
+---
 
 ## Contributing
 
