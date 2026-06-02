@@ -58,6 +58,8 @@ docker run --rm -it \
   -lc 'exec /home/hived_admin/docker_entrypoint.sh /home/hived/bin/hived'
 ```
 
+Without a `pixagram/config.ini` in the bind-mounted datadir, hived starts in **isolation** — no `p2p-seed-node`, no witness, no plugins beyond defaults. For a turnkey witness-only setup that joins the live network out of the box, use the [`pixagram-blockchain/witness`](https://github.com/pixagram-blockchain/witness) repo (docker-compose + minimal `config.ini` pre-wired to `api.pixagram.com:2001`).
+
 ## Differences from Hive
 
 ### Tokens & addresses
