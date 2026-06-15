@@ -100,6 +100,16 @@ Symbols inside response strings (`"1.000 HBD"` etc.) are also normalized to PIXA
 | `content_constant` (`s`) | **`2500`** | **drastically smaller** than upstream's `2_000_000_000_000` — tuned for pre-mainnet rshare scale so small accounts produce non-zero rshares |
 | `percent_curation_rewards` | `40%` | of the content reward pool |
 
+### Monetary policy — zero passive yield by design
+Pixagram welds both of Hive's passive-yield levers to zero in consensus code (pre-mainnet branch), so **neither liquid PXS nor staked VESTS earns anything for merely being held**:
+
+| Lever | Upstream Hive | Pixagram |
+|---|---|---|
+| `hbd_interest_rate` (PXS interest) | witness-median, `0`–`100%` | **hard-locked to `0`** — witnesses *cannot* publish a nonzero value (validation asserts `== 0`); the median is forced to 0. Changeable only by hardfork. |
+| `vesting_reward_percent` (VESTS appreciation) | `15%` of inflation → vesting fund | **`0`** — the vesting fund gets no inflation top-up, so the VESTS:PIXA ratio stays ~flat. |
+
+The HF21 inflation split is retuned to match: **content `70%` / DPF `15%` / witness `15%` / vesting `0%`** (upstream: `65` / `10` / `10` / `15`). The only reward flowing to stakers is **curation** (`40%` of the content pool, above) — payment for *active voting*, not passive yield on the stake.
+
 ### Communities (Hivemind)
 Community names must match **`portal-[123]\d{4,6}`** (e.g. `portal-100001`) — Pixagram **kept upstream's `portal-` prefix**, did NOT rename to `pixagram-`. Fresh chain → no communities exist until `community_create` ops are broadcast.
 
@@ -123,7 +133,7 @@ Community names must match **`portal-[123]\d{4,6}`** (e.g. `portal-100001`) — 
 | **VESTS : PIXA at genesis** | **1 : 1** in display units (= 1,000,000 raw microVESTS per display PIXA). Macro: `HIVE_INITIAL_VESTING_PRICE = price(VEST_asset(1000), HIVE_asset(1))`. Diverges from Hive/Steem's historical `1 STEEM ≈ 0.0018 VESTS` genesis ratio. |
 | **Genesis median feed** | `1 PXS = 102 PIXA` seeded in source so conversions work before witnesses publish |
 
-The vesting ratio drifts upward over time as inflation flows into `total_vesting_fund_pixa` without issuing new VESTS — the standard Hive staking-yield mechanism.
+Unlike upstream Hive, the VESTS:PIXA ratio stays ~flat over time: Pixagram sets `vesting_reward_percent = 0`, so no inflation is added to `total_vesting_fund_pixa` without also issuing VESTS. All vesting-fund growth comes from power-ups and reward payouts that mint VESTS at the prevailing ratio (ratio-preserving). There is no passive staking yield — see [Monetary policy](#monetary-policy--zero-passive-yield-by-design) above.
 
 ## Quick examples
 
