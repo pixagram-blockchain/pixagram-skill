@@ -6,7 +6,7 @@ The skill covers:
 - Mainnet (`api.pixagram.com`) and testnet (`pixagram.dev`) RPC endpoints
 - Token renames vs Hive (PIXA, PXS, VESTS, `PIX` pubkey prefix)
 - API field renames Jussi performs (`pxs_balance`, `dpf_interval_ledger`, …)
-- Genesis / system accounts (`initminer`, `pixa.ico`, `pixa.team`, `pixa.omnibus`, …)
+- Genesis / system accounts (`initminer`, `pixa.rex`, `pixa.team`, `pixa.omnibus`, …) and the VESTS-only restrictions on the allocation accounts
 - Hivemind routing for `bridge.*` / `follow_api.*` / `tags_api.*`
 - Curl examples for the most common queries
 
