@@ -58,6 +58,8 @@ docker run --rm -it \
   -lc 'exec /home/hived_admin/docker_entrypoint.sh /home/hived/bin/hived'
 ```
 
+**Entrypoint path differs by image generation.** Images built from the pre-1.28.7 tree run the build and the daemon as `hived_admin`, so the entrypoint is `/home/hived_admin/docker_entrypoint.sh` (as above). From hived 1.28.7 onward everything runs as `hived` and the entrypoint is **`/home/hived/docker_entrypoint.sh`**. Check with `docker inspect --format '{{.Config.Entrypoint}}' <image>` rather than assuming.
+
 Without a `pixagram/config.ini` in the bind-mounted datadir, hived starts in **isolation** — no `p2p-seed-node`, no witness, no plugins beyond defaults. For a turnkey witness-only setup that joins the live network out of the box, use the [`pixagram-blockchain/witness`](https://github.com/pixagram-blockchain/witness) repo (docker-compose + minimal `config.ini` pre-wired to `api.pixagram.com:2001`).
 
 ## Differences from Hive
