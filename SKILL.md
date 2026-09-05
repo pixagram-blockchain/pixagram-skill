@@ -15,9 +15,12 @@ A fork of [Hive](https://hive.io), tracking upstream **hived 1.28.7**. The stand
 | | https://merlion.surf | Singapore |
 | | https://blockforge.lol | France |
 | | https://pixarex.net | Iowa, US |
+| | https://pixa-dubai.xyz | Dubai |
+| | https://boitata.quest | São Paulo |
 
 Use `https://api.pixagram.com` unless you have a reason not to. The others are
-independent full nodes on the same chain and answer identically.
+independent full nodes on the same chain and answer identically — each runs the
+full stack, so `bridge.*` and `network_broadcast_api` work on all of them.
 
 There is no testnet endpoint. `pixagram.dev` appears in older documentation and
 in the built-in `--rpc` default of `bigmac-feed`; it no longer serves an API and
@@ -36,7 +39,27 @@ Use the published images when a local Pixagram node, HAF node, Hivemind indexer,
 | `pixadock/hivemind:mainnet` | Hivemind setup, sync, and social API server |
 | `pixadock/bigmac-feed:v1.0.2` | Witness price feed publisher |
 
-For a working full stack, prefer the Pixagram alphanet Docker Compose setup (`pixagram-blockchain/alphanet`). It wires together `pixagram`, `pixagram_haf`, Hivemind setup/sync/server, Jussi, TLS, and `bigmac-feed`.
+There are two ready-made deployments, and which one you want depends on whether
+you intend to produce blocks:
+
+| Repo | What it runs | Use it for |
+|---|---|---|
+| [`pixagram-blockchain/pixagram-node`](https://github.com/pixagram-blockchain/pixagram-node) | `pixagram`, `pixagram_haf`, Hivemind setup/sync/server, Jussi, Caddy TLS | A public API node. No witness, no feed. |
+| [`pixagram-blockchain/witness`](https://github.com/pixagram-blockchain/witness) | `pixagram` plus `bigmac-feed`, two containers | Block production only. No HAF, no PostgreSQL, no public API. |
+
+`pixagram-blockchain/alphanet` is the original development stack these were split
+out of; prefer one of the two above for a new deployment.
+
+An API node wants roughly 4 vCPU / 16 GB. Below about 24 GB of RAM you **must**
+lower PostgreSQL's `shared_buffers` — HAF ships it at 16 GiB, tuned for full
+Hive, and Postgres refuses to start if it cannot reserve that. Drop a file into
+`pixagram-haf/haf_postgresql_conf.d/` (it is bind-mounted and read last):
+
+```
+shared_buffers = 1536MB
+effective_cache_size = 3GB
+maintenance_work_mem = 384MB
+```
 
 The main image includes `/home/hived/bin/cli_wallet`. Override the entrypoint to run it; it defaults to the Pixagram chain ID. Use `-o` for offline signing, or pass `--server-rpc-endpoint=ws://...` for a websocket RPC node.
 
@@ -122,6 +145,12 @@ Symbols inside response strings (`"1.000 HBD"` etc.) are also normalized to PIXA
 ### Price feed quorum
 Upstream requires `HIVE_MIN_FEEDS` (= `HIVE_MAX_WITNESSES / 3` = 7) published feeds before a median exists. Pixagram lowers this to `max(1, num_scheduled_witnesses / 3)`, so the median tracks published feeds even while the chain runs on a handful of witnesses. Combined with the genesis feed seed (below), conversions and treasury accounting work from block 1.
 
+**`get_config` is misleading here.** It still reports `HIVE_MIN_FEEDS: 7`, because
+only the runtime check was lowered, not the macro it echoes. Do not read that
+value as the effective quorum. The observable proof is that the median tracked
+live feeds while the chain was running on six witnesses, and reported the feed
+price rather than the seeded genesis value.
+
 ### Monetary policy — zero passive yield by design
 Pixagram welds both of Hive's passive-yield levers to zero in consensus code, so **neither liquid PXS nor staked VESTS earns anything for merely being held**:
 
@@ -147,7 +176,31 @@ Community names must match **`portal-[123]\d{4,6}`** (e.g. `portal-100001`) — 
 
 `pixa.rex` and `pixa.team` are each guarded by a **3-of-3 multisig** on all three authorities (owner, active, posting) — three independent signers, `weight_threshold = 3`, so all three signatures are required. The memo key is a single (non-consensus) key per account. The treasury `pixa.omnibus` is deliberately **keyless**.
 
-Account creation is **free at genesis** (`account_creation_fee = 0` on the initminer witness and in the seeded witness-schedule median) so the network can bootstrap. Once real witnesses publish properties via `witness_set_properties_operation`, any fee they set must satisfy `HIVE_MIN_ACCOUNT_CREATION_FEE` as usual.
+Account creation was free at genesis (`account_creation_fee = 0`), but on the
+live chain the witness-schedule median is now **0.001 PIXA** and cannot return to
+zero: `HIVE_MIN_ACCOUNT_CREATION_FEE` is 1 (0.001 PIXA), so the moment any witness
+publishes chain properties via `witness_set_properties_operation` the median
+leaves zero for good.
+
+That matters more than it looks, because **`initminer` holds no liquid PIXA** — its
+genesis allocation is 0 PIXA and it only ever accrues VESTS from producer rewards.
+A plain `account_create` from initminer therefore fails with:
+
+```
+Account initminer does not have sufficient funds for balance adjustment
+```
+
+Create accounts through the **subsidy pool** instead, which spends RC rather than
+PIXA. In `cli_wallet`:
+
+```
+claim_account_creation   <creator> "0.000 PIXA" true
+create_claimed_account   <creator> <new_account> <owner_key> <active_key> <posting_key> <memo_key> "{}" true
+```
+
+The pool is funded per block by `account_subsidy_budget` (decaying at
+`account_subsidy_decay`); both are visible in `condenser_api.get_chain_properties`
+alongside the current `account_creation_fee`.
 
 ### Restricted accounts: `pixa.rex` and `pixa.team`
 
