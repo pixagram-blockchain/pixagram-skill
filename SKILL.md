@@ -5,7 +5,7 @@ description: Use when interacting with the Pixagram blockchain — a Hive fork. 
 
 # Pixagram
 
-A fork of [Hive](https://hive.io), tracking upstream **hived 1.28.7**. The standard Hive RPC surface (`condenser_api.*`, `database_api.*`, `bridge.*`, `follow_api.*`, `tags_api.*`) works — only the renames and tuning below differ.
+A fork of [Hive](https://hive.io), tracking upstream **hived 1.28.7**; the live network runs Pixagram's own **1.29.0** (hardfork 29, activating 2026-09-18 12:00 UTC — see [Hardfork 29](#hardfork-29--reward-denominator-reset-and-witness-scaled-hardfork-quorum)). The standard Hive RPC surface (`condenser_api.*`, `database_api.*`, `bridge.*`, `follow_api.*`, `tags_api.*`) works — only the renames and tuning below differ.
 
 ## Endpoints
 
@@ -34,10 +34,12 @@ Use the published images when a local Pixagram node, HAF node, Hivemind indexer,
 
 | Image | Use |
 |---|---|
-| `pixadock/pixagram:mainnet` | Main blockchain node (`hived`) and CLI wallet |
-| `pixadock/pixagram-haf:mainnet` | HAF node (`hived` + PostgreSQL indexer) |
+| `pixadock/pixagram:1.29.0` | Main blockchain node (`hived`) and CLI wallet — current mainnet build |
+| `pixadock/pixagram-haf:1.29.0` | HAF node (`hived` + PostgreSQL indexer) |
 | `pixadock/hivemind:mainnet` | Hivemind setup, sync, and social API server |
-| `pixadock/bigmac-feed:v1.0.2` | Witness price feed publisher |
+| `pixadock/bigmac-feed:v1.0.3` | Witness price feed publisher |
+
+Tag history: `:pre-mainnet` is the old alphanet build (pre-1.28.7 tree, `hived_admin` entrypoint), `:mainnet` is the 1.28.7 build the chain launched on, `:1.29.0` is what every node runs since the hardfork 29 rollout on 2026-09-16. Pin the version tag; do not assume `:mainnet` is current.
 
 There are two ready-made deployments, and which one you want depends on whether
 you intend to produce blocks:
@@ -69,7 +71,7 @@ docker run --rm -it \
   -v "$PWD/wallet:/wallet" \
   -w /wallet \
   --entrypoint /home/hived/bin/cli_wallet \
-  pixadock/pixagram:mainnet \
+  pixadock/pixagram:1.29.0 \
   -o
 ```
 
@@ -86,11 +88,11 @@ docker run --rm -it \
   -e HIVED_UID=1000 \
   --ulimit nofile=1048576:1048576 \
   --entrypoint /bin/bash \
-  pixadock/pixagram:mainnet \
-  -lc 'exec /home/hived_admin/docker_entrypoint.sh /home/hived/bin/hived'
+  pixadock/pixagram:1.29.0 \
+  -lc 'exec /home/hived/docker_entrypoint.sh /home/hived/bin/hived'
 ```
 
-**Entrypoint path differs by image generation.** Images built from the pre-1.28.7 tree run the build and the daemon as `hived_admin`, so the entrypoint is `/home/hived_admin/docker_entrypoint.sh` (as above). From hived 1.28.7 onward everything runs as `hived` and the entrypoint is **`/home/hived/docker_entrypoint.sh`**. Check with `docker inspect --format '{{.Config.Entrypoint}}' <image>` rather than assuming.
+**Entrypoint path differs by image generation.** Images built from the pre-1.28.7 tree run the build and the daemon as `hived_admin`, so the entrypoint is `/home/hived_admin/docker_entrypoint.sh`. From hived 1.28.7 onward (`:mainnet`, `:1.29.0`) everything runs as `hived` and the entrypoint is **`/home/hived/docker_entrypoint.sh`** (as above). Check with `docker inspect --format '{{.Config.Entrypoint}}' <image>` rather than assuming.
 
 Without a `pixagram/config.ini` in the bind-mounted datadir, hived starts in **isolation** — no `p2p-seed-node`, no witness, no plugins beyond defaults. For a turnkey witness-only setup that joins the live network out of the box, use the [`pixagram-blockchain/witness`](https://github.com/pixagram-blockchain/witness) repo (docker-compose + minimal `config.ini` pre-wired to `api.pixagram.com:2001`).
 
@@ -151,6 +153,21 @@ value as the effective quorum. The observable proof is that the median tracked
 live feeds while the chain was running on six witnesses, and reported the feed
 price rather than the seeded genesis value.
 
+### Hardfork 29 — reward denominator reset and witness-scaled hardfork quorum
+
+Activates **2026-09-18 12:00:00 UTC** (`HIVE_HARDFORK_1_29_TIME = 1789732800`) with hived **1.29.0**. Scheduled on chain since 2026-09-16 — `database_api.get_hardfork_properties` shows `next_hardfork 1.29.0` — and every witness and API node already runs 1.29.0.
+
+**Why it exists.** Mainnet genesis (2026-09-04) applied HF1–28 at block 1, and HF17/19/21 each seed the post reward fund's `recent_claims` with a Steem/Hive-mainnet snapshot (guarded only by `#ifndef IS_TEST_NET`). The fund therefore started at 5.036e17 — roughly 1.2 million times this chain's real claim scale — so every author payout before HF29 came out below `HIVE_MIN_PAYOUT_HBD` (0.020 PXS) and was **zeroed** by `util::get_rshare_reward()`, with the rshares consumed anyway. Symptom: `pending_payout_value` of 0.00x and no `author_reward_operation` even on well-voted posts.
+
+**What `apply_hardfork(29)` does:**
+- Sets the `post` fund's `recent_claims` to `min(current, PIXA_HF29_RECENT_CLAIMS)`, with `PIXA_HF29_RECENT_CLAIMS = 27,500,000,000,000` (2.75e13 = `max(15 d × daily claims, 99 × largest pending claim)` measured on 2026-09-13; the second term binds, i.e. no single post can take more than 1 % of the pool at activation). Never raises the value; balances, VESTS, PXS, the treasury and feeds are untouched.
+- From then on `recent_claims` converges to its steady state (~15 d × daily claims) within about two months regardless of the seed, and the first post cashing out after activation pays real PXS — at launch-time activity tens of PXS per average post, thinning as more people post.
+- Hardfork quorum: upstream requires `HIVE_HARDFORK_REQUIRED_WITNESSES = 17` scheduled witnesses, which assumes a full 21-slot schedule and can never be reached on a small chain. Pixagram uses `pixa_hardfork_quorum(n) = clamp(ceil(n × 17 / 21), 1, n)` over the witnesses actually scheduled — 8 → 7, 21 → 17. The hardfork-vote tally uses it from 1.29.0 onward (it has to: it is what gates HF29); the majority-version tally and the API-visible `witness_schedule.hardfork_required_witnesses` switch at activation (17 → 7 with 8 scheduled) and are refreshed on every schedule update. Votes for a hardfork version at or below the current one are ignored — witnesses created after genesis carry a default `0.0.0` vote that upstream's block producer could never replace while `last_hardfork == HIVE_NUM_HARDFORKS`.
+
+**Operational facts.** After activation a block from a witness still below 1.29.0 is rejected (`witness.running_version >= current_hardfork_version`). Moving a node across hived versions needs a replay, not a restart: hived stamps its `get_config` into `shared_memory.bin` and refuses a state file written by another version (`Blockchain config from shared memory file mismatch`), and HAF cannot replay into a Postgres that already holds blocks. The working recipe — one-off `--force-replay --exit-before-sync` for the consensus node, HAF + Hivemind resynced from scratch and started together, then a Jussi restart — is in the READMEs of `alphanet`, `pixagram-node` and `witness`.
+
+**Verifying at T:** `condenser_api.get_reward_fund("post").recent_claims` drops to `27500000000000`; `get_hardfork_properties.last_hardfork` becomes 29 (`processed_hardforks` gains its 30th entry); `get_witness_schedule.hardfork_required_witnesses` becomes 7; every node logs `HARDFORK 29`. Do reward math from hived, not from the social API: Hivemind reports `rshares` / `net_rshares` ×10⁶ relative to the consensus values in `effective_comment_vote_operation`.
+
 ### Monetary policy — zero passive yield by design
 Pixagram welds both of Hive's passive-yield levers to zero in consensus code, so **neither liquid PXS nor staked VESTS earns anything for merely being held**:
 
@@ -168,7 +185,7 @@ Community names must match **`portal-[123]\d{4,6}`** (e.g. `portal-100001`) — 
 
 | Account | Genesis allocation | Notes |
 |---|---|---|
-| `initminer` | 0 PIXA, 0 PXS, 0 VESTS at block 0 — accumulates VESTS via producer rewards | Sole witness at genesis; mainnet now runs several |
+| `initminer` | 0 PIXA, 0 PXS, 0 VESTS at block 0 — accumulates VESTS via producer rewards | Sole witness at genesis; mainnet runs 8 witnesses |
 | `pixa.rex` | **75,000,000 VESTS** | Sales / ICO pool (Pixa Operations S.A., Panama). **Not** `pixa.ico` — that name never shipped. Restricted account, see below. |
 | `pixa.team` | **25,000,000 VESTS** | Team & advisors. Restricted account, see below. |
 | `pixa.omnibus` (treasury) | **245,098.039 PXS** | DPF treasury — the PXS value of 25M PIXA at the genesis median feed (25,000,000 / 102). This is the figure at block 0; the balance grows every hour from DPF funding. Liquid PXS only, no VESTS: HF21 fires at block 1 and calls `lock_account()` on the treasury, which would strand any VESTS, and the proposal payout pipeline draws exclusively from the PXS balance. |
