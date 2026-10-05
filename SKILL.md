@@ -109,13 +109,14 @@ Without a `pixagram/config.ini` in the bind-mounted datadir, hived starts in **i
 
 When building legacy-format asset payloads, send `PIXA` / `PXS` as the on-wire symbol bytes (not `STEEM` / `SBD` that older Hive clients hardcode). HF26 NAI-format assets work as-is.
 
-### Raised limits
+### Size limits
 | | Upstream Hive | Pixagram |
 |---|---|---|
-| `HIVE_MAX_TRANSACTION_SIZE` | 64 KiB | **128 KiB** |
-| `HIVE_CUSTOM_OP_DATA_MAX_LENGTH` (`custom_json` payload) | 8 KiB | **64 KiB** |
+| Transaction size, as hived enforces it (`maximum_block_size − 256` bytes) | ~64 KiB (witnesses vote 65,536) | **~2 MiB** (witnesses vote 2,097,152, the hard cap) |
+| `custom_json` payload (`HIVE_CUSTOM_OP_DATA_MAX_LENGTH`) | 8 KiB | **64 KiB** |
+| JSON-RPC request body at `api.pixagram.com` | — | **1 MiB** (nginx default in front of Jussi) |
 
-`HIVE_MIN_BLOCK_SIZE_LIMIT` tracks the transaction size, so it doubles too; `HIVE_MAX_BLOCK_SIZE` stays at 2 MiB.
+`HIVE_MAX_TRANSACTION_SIZE` is raised to 128 KiB, but no consensus code checks a transaction against it: it only sets `HIVE_MIN_BLOCK_SIZE_LIMIT`, the smallest block size witnesses may vote. The real ceiling is the voted block size. Posts carry their images as base64 data URIs, so one post can run to hundreds of kilobytes (the largest on chain is about 498 kB). Anything over 1 MiB is rejected by the public API before it reaches the chain.
 
 ### API field renames
 Jussi rewrites these in responses (and accepts the new names in requests):
